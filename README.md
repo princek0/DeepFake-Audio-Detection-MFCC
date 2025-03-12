@@ -30,6 +30,7 @@ This repository is a fork of the original project developed during the AIAmplify
 - Fixed "No module named 'aifc'" error that prevented processing certain files
 - Created comprehensive documentation and setup instructions
 - Added requirements.txt for easier dependency management
+- Added standalone analysis script for easy integration with other applications
 
 ## Table of Contents
 1. [Installation](#installation)
@@ -38,8 +39,10 @@ This repository is a fork of the original project developed during the AIAmplify
    - [Training the Model](#training-the-model)
    - [Using the Web Application](#using-the-web-application)
    - [Command Line Analysis](#command-line-analysis)
-4. [Technical Details](#technical-details)
-5. [License](#license)
+   - [Using the Analysis Module](#using-the-analysis-module)
+4. [API Integration](#api-integration)
+5. [Technical Details](#technical-details)
+6. [License](#license)
 
 ## Installation
 
@@ -73,6 +76,7 @@ This repository is a fork of the original project developed during the AIAmplify
 ## Project Structure
 - `main.py`: Script for training the SVM model and basic audio analysis
 - `app.py`: Flask web application for user-friendly deepfake detection
+- `analyze_audio.py`: Standalone module for analyzing audio files with the pre-trained model
 - `real_audio/`: Directory for storing genuine audio samples
 - `deepfake_audio/`: Directory for storing deepfake audio samples
 - `templates/`: Contains HTML templates for the web interface
@@ -120,17 +124,86 @@ This repository is a fork of the original project developed during the AIAmplify
 ### Command Line Analysis
 To analyze a specific audio file directly:
 
-1. Run the main script and provide the file path when prompted:
+1. Run the analysis script with the path to the audio file:
    ```bash
-   python main.py
-   # When prompted, enter the path to your audio file
+   python analyze_audio.py path/to/your/audio.wav
    ```
+
+2. The script will output:
+   - Classification result (REAL or DEEPFAKE)
+   - Confidence score (0-1)
+   - Raw decision score
+   - Interpretation of the results
+
+### Using the Analysis Module
+The `analyze_audio.py` script can also be imported as a module in your own Python applications:
+
+```python
+import analyze_audio
+
+# Analyze an audio file
+result = analyze_audio.analyze_file("path/to/audio.wav")
+
+# Access the results
+classification = result["classification"]  # "real" or "deepfake"
+confidence = result["confidence"]  # float between 0 and 1
+raw_score = result["raw_score"]  # decision function value
+
+# Check for errors
+if "error" in result:
+    print(f"Error occurred: {result['error']}")
+else:
+    print(f"The audio is {classification} with {confidence:.2f} confidence")
+```
+
+The `analyze_file` function accepts the following parameters:
+- `audio_path`: Path to the audio file (required)
+- `model_path`: Path to the saved SVM model (default: "svm_model.pkl")
+- `scaler_path`: Path to the saved scaler (default: "scaler.pkl")
+
+## API Integration
+The `analyze_audio.py` module is designed to be easily integrated with REST APIs or WebSocket services. The repository includes dependencies for FastAPI, which allows:
+
+- Creating real-time audio analysis endpoints
+- Building WebSocket connections for streaming audio analysis
+- Developing scalable microservices for audio verification
+
+A basic FastAPI integration example might look like:
+
+```python
+from fastapi import FastAPI, UploadFile, File
+import analyze_audio
+import tempfile
+import os
+
+app = FastAPI()
+
+@app.post("/analyze/")
+async def analyze_audio_file(file: UploadFile = File(...)):
+    # Save the uploaded file temporarily
+    temp_dir = tempfile.mkdtemp()
+    temp_path = os.path.join(temp_dir, file.filename)
+    
+    with open(temp_path, "wb") as f:
+        f.write(await file.read())
+    
+    # Analyze the audio
+    result = analyze_audio.analyze_file(temp_path)
+    
+    # Clean up
+    os.remove(temp_path)
+    os.rmdir(temp_dir)
+    
+    return result
+```
 
 ## Technical Details
 - **Feature Extraction**: The system extracts 13 MFCC coefficients from audio files
 - **Classification**: Uses a Support Vector Machine with a linear kernel
 - **Audio Processing**: Utilizes SoundFile and Librosa libraries for robust audio handling
 - **Performance**: The model typically achieves accuracy between 80-95% depending on the dataset quality
+- **Error Handling**: The module includes comprehensive error handling and validation
+- **Confidence Scoring**: Uses distance from decision boundary to estimate prediction confidence
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
