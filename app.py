@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, render_template
 import librosa
 import numpy as np
+import soundfile as sf
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 import joblib
@@ -10,13 +11,25 @@ app = Flask(__name__)
 
 def extract_mfcc_features(audio_path, n_mfcc=13, n_fft=2048, hop_length=512):
     try:
-        audio_data, sr = librosa.load(audio_path, sr=None)
+        # Using soundfile which has better support for various audio formats
+        audio_data, sr = sf.read(audio_path)
+        if audio_data.ndim > 1:  # If stereo, convert to mono
+            audio_data = np.mean(audio_data, axis=1)
     except Exception as e:
-        print(f"Error loading audio file {audio_path}: {e}")
-        return None
+        try:
+            # Fall back to librosa if soundfile fails
+            audio_data, sr = librosa.load(audio_path, sr=None)
+        except Exception as e:
+            print(f"Error loading audio file {audio_path}: {e}")
+            return None
 
-    mfccs = librosa.feature.mfcc(y=audio_data, sr=sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
-    return np.mean(mfccs.T, axis=0)
+    # Extract MFCC features
+    try:
+        mfccs = librosa.feature.mfcc(y=audio_data, sr=sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
+        return np.mean(mfccs.T, axis=0)
+    except Exception as e:
+        print(f"Error extracting MFCC features from {audio_path}: {e}")
+        return None
 
 def analyze_audio(input_audio_path):
     model_filename = "svm_model.pkl"
@@ -24,8 +37,8 @@ def analyze_audio(input_audio_path):
 
     if not os.path.exists(input_audio_path):
         return "Error: The specified file does not exist."
-    elif not input_audio_path.lower().endswith(".wav"):
-        return "Error: The specified file is not a .wav file."
+    elif not (input_audio_path.lower().endswith(".wav") or input_audio_path.lower().endswith(".mp3")):
+        return "Error: The specified file is not a supported audio format (WAV or MP3)."
 
     mfcc_features = extract_mfcc_features(input_audio_path)
     if mfcc_features is not None:
@@ -62,12 +75,13 @@ def index():
             os.remove(audio_path) 
             return render_template("result.html", result=result)
         
-        return render_template("index.html", message="Invalid file format. Only .wav files allowed.")
+        return render_template("index.html", message="Invalid file format. Only .wav and .mp3 files allowed.")
     
     return render_template("index.html")
 
 def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() == "wav"
+    allowed_extensions = {'wav', 'mp3'}
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
 
 if __name__ == "__main__":
     app.run(debug=True)
