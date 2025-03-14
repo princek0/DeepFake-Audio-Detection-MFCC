@@ -31,6 +31,7 @@ This repository is a fork of the original project developed during the AIAmplify
 - Created comprehensive documentation and setup instructions
 - Added requirements.txt for easier dependency management
 - Added standalone analysis script for easy integration with other applications
+- Added WebSocket API for real-time deepfake audio detection
 
 ## Table of Contents
 1. [Installation](#installation)
@@ -41,6 +42,7 @@ This repository is a fork of the original project developed during the AIAmplify
    - [Command Line Analysis](#command-line-analysis)
    - [Using the Analysis Module](#using-the-analysis-module)
 4. [API Integration](#api-integration)
+   - [WebSocket API](#websocket-api)
 5. [Technical Details](#technical-details)
 6. [License](#license)
 
@@ -77,6 +79,7 @@ This repository is a fork of the original project developed during the AIAmplify
 - `main.py`: Script for training the SVM model and basic audio analysis
 - `app.py`: Flask web application for user-friendly deepfake detection
 - `analyze_audio.py`: Standalone module for analyzing audio files with the pre-trained model
+- `api/`: Directory containing the WebSocket API implementation and examples
 - `real_audio/`: Directory for storing genuine audio samples
 - `deepfake_audio/`: Directory for storing deepfake audio samples
 - `templates/`: Contains HTML templates for the web interface
@@ -197,6 +200,24 @@ async def analyze_audio_file(file: UploadFile = File(...)):
     return result
 ```
 
+### WebSocket API
+
+The project includes a full-featured WebSocket API implementation for real-time deepfake audio detection. This allows for:
+
+- Low-latency real-time audio analysis
+- Streaming audio data for immediate detection
+- Integration with web applications and client applications
+
+All API-related files are located in the `api/` directory:
+
+- `api/api.py`: The main FastAPI application with WebSocket and HTTP endpoints
+- `api/client_example.html`: A simple browser-based client for testing the API
+- `api/realtime_client.html`: An advanced client with audio recording capabilities
+- `api/python_client.py`: A Python client example for programmatic API usage
+- `api/README.md`: Comprehensive documentation for the API
+
+To use the WebSocket API, follow the instructions in [`api/README.md`](api/README.md).
+
 ## Technical Details
 - **Feature Extraction**: The system extracts 13 MFCC coefficients from audio files
 - **Classification**: Uses a Support Vector Machine with a linear kernel
@@ -204,6 +225,7 @@ async def analyze_audio_file(file: UploadFile = File(...)):
 - **Performance**: The model typically achieves accuracy between 80-95% depending on the dataset quality
 - **Error Handling**: The module includes comprehensive error handling and validation
 - **Confidence Scoring**: Uses distance from decision boundary to estimate prediction confidence
+- **Real-time Analysis**: WebSocket API allows for low-latency processing of audio streams
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.

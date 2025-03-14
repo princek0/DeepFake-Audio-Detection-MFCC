@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepfake Audio Detection - WebSocket Client</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .controls {
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+        #results, #logs {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .status.connected {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .status.disconnected {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .real {
+            color: green;
+            font-weight: bold;
+        }
+        .deepfake {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Deepfake Audio Detection - WebSocket Client</h1>
+    
+    <div class="section">
+        <h2>Connection Status</h2>
+        <div id="connection-status" class="status disconnected">Disconnected</div>
+        <div class="controls">
+            <button id="connect-btn">Connect</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>File Upload (REST API)</h2>
+        <div class="controls">
+            <input type="file" id="file-input" accept=".wav,.mp3" />
+            <button id="upload-btn">Upload and Analyze</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>WebSocket Audio Stream</h2>
+        <div class="controls">
+            <input type="file" id="ws-file-input" accept=".wav,.mp3" />
+            <button id="send-btn" disabled>Send via WebSocket</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Results</h2>
+        <div id="results"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Logs</h2>
+        <div id="logs"></div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const uploadBtn = document.getElementById('upload-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const fileInput = document.getElementById('file-input');
+        const wsFileInput = document.getElementById('ws-file-input');
+        const resultsContainer = document.getElementById('results');
+        const logsContainer = document.getElementById('logs');
+        const connectionStatus = document.getElementById('connection-status');
+        
+        // WebSocket connection
+        let ws = null;
+        const wsUrl = 'ws://localhost:8000/ws';
+        const apiUrl = 'http://localhost:8000/analyze';
+        
+        // Add a log message
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logsContainer.innerHTML += `[${timestamp}] ${message}\n`;
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+        
+        // Display results
+        function displayResults(result) {
+            // Clear previous results
+            resultsContainer.innerHTML = '';
+            
+            if (result.error) {
+                resultsContainer.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                return;
+            }
+            
+            const classification = result.classification.toUpperCase();
+            const confidence = Math.round(result.confidence * 100);
+            const rawScore = result.raw_score.toFixed(4);
+            
+            const classColor = classification === 'REAL' ? 'real' : 'deepfake';
+            
+            resultsContainer.innerHTML = `
+                <div>
+                    <strong>Classification:</strong> <span class="${classColor}">${classification}</span>
+                </div>
+                <div>
+                    <strong>Confidence:</strong> ${confidence}%
+                </div>
+                <div>
+                    <strong>Raw Score:</strong> ${rawScore}
+                </div>
+                <div>
+                    <strong>Interpretation:</strong> ${rawScore < 0 ? 'Negative scores indicate REAL audio' : 'Positive scores indicate DEEPFAKE audio'}
+                </div>
+            `;
+        }
+        
+        // Connect to WebSocket
+        connectBtn.addEventListener('click', () => {
+            if (ws) {
+                log('WebSocket already connected');
+                return;
+            }
+            
+            try {
+                log('Connecting to WebSocket...');
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    log('WebSocket connected');
+                    connectionStatus.textContent = 'Connected';
+                    connectionStatus.className = 'status connected';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    sendBtn.disabled = false;
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    log('Received message from server');
+                    displayResults(data);
+                };
+                
+                ws.onclose = () => {
+                    log('WebSocket disconnected');
+                    connectionStatus.textContent = 'Disconnected';
+                    connectionStatus.className = 'status disconnected';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    sendBtn.disabled = true;
+                    ws = null;
+                };
+                
+                ws.onerror = (error) => {
+                    log(`WebSocket error: ${error}`);
+                };
+            } catch (error) {
+                log(`Error connecting to WebSocket: ${error}`);
+            }
+        });
+        
+        // Disconnect from WebSocket
+        disconnectBtn.addEventListener('click', () => {
+            if (!ws) {
+                log('WebSocket not connected');
+                return;
+            }
+            
+            ws.close();
+        });
+        
+        // Send file via WebSocket
+        sendBtn.addEventListener('click', async () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected');
+                return;
+            }
+            
+            const file = wsFileInput.files[0];
+            if (!file) {
+                log('No file selected');
+                return;
+            }
+            
+            try {
+                // Read file as base64
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64data = e.target.result;
+                    
+                    // Send data via WebSocket
+                    const message = {
+                        audio_data: base64data,
+                        file_type: file.name.toLowerCase().endsWith('.mp3') ? '.mp3' : '.wav'
+                    };
+                    
+                    ws.send(JSON.stringify(message));
+                    log(`Sent file "${file.name}" via WebSocket`);
+                };
+                
+                reader.readAsDataURL(file);
+            } catch (error) {
+                log(`Error sending file via WebSocket: ${error}`);
+            }
+        });
+        
+        // Upload file via REST API
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                log('No file selected');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                log(`Uploading file "${file.name}" via REST API...`);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    log('File analyzed successfully');
+                    displayResults(result);
+                } else {
+                    log(`API error: ${result.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                log(`Error uploading file: ${error}`);
+            }
+        });
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            log('Client initialized');
+        });
+    </script>
+</body>
+</html> 
